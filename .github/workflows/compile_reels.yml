@@ -1,0 +1,19 @@
+name: Compile Reels
+
+on:
+  workflow_dispatch:  # manual trigger
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install FFmpeg
+        run: sudo apt-get update && sudo apt-get install -y ffmpeg
+
+      - name: Run Compilation Script
+        run: |
+          chmod +x ./scripts/compile_reels.sh
+          ./scripts/compile_reels.sh
