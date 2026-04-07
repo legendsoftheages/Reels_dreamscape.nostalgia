@@ -12,33 +12,37 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v3
 
-      - name: Install Python dependencies
+      - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install pydrive2
+          pip install google-api-python-client google-auth-httplib2 google-auth-oauthlib
 
       - name: Save Service Account JSON
         run: |
           mkdir -p $HOME/.secrets
           printf "%s" "${{ secrets.GDRIVE_SERVICE_ACCOUNT }}" > $HOME/.secrets/service_account.json
 
-      - name: Upload spotify.png to Google Drive
+      - name: Upload spotify.png
         env:
           SERVICE_ACCOUNT_FILE: $HOME/.secrets/service_account.json
         run: |
           python - <<EOF
-          from pydrive2.auth import GoogleAuth
-          from pydrive2.drive import GoogleDrive
+          from google.oauth2 import service_account
+          from googleapiclient.discovery import build
           import os
 
           SERVICE_ACCOUNT_FILE = os.environ["SERVICE_ACCOUNT_FILE"]
 
-          gauth = GoogleAuth()
-          gauth.LoadServiceAccountCredentialsFile(SERVICE_ACCOUNT_FILE)  # correct method
-          drive = GoogleDrive(gauth)
+          SCOPES = ['https://www.googleapis.com/auth/drive.file']
 
-          file = drive.CreateFile({'title': 'spotify.png'})
-          file.SetContentFile('spotify.png')
-          file.Upload()
-          print("✅ Uploaded successfully!")
+          credentials = service_account.Credentials.from_service_account_file(
+              SERVICE_ACCOUNT_FILE, scopes=SCOPES)
+
+          service = build('drive', 'v3', credentials=credentials)
+
+          file_metadata = {'name': 'spotify.png'}
+          media = MediaFileUpload('spotify.png', mimetype='image/png')
+          file = service.files().create(body=file_metadata, media_body=media, fields='id').execute()
+
+          print(f"✅ Uploaded file ID: {file.get('id')}")
           EOF
