@@ -1,29 +1,35 @@
-name: Upload to Google Drive
+name: Upload to Drive
 
 on:
   push:
-    branches:
-      - main
+    branches: [main]
 
 jobs:
   upload:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v3
 
-      - name: Install rclone
-        run: |
-          curl https://rclone.org/install.sh | sudo bash
+      - name: Set up Rclone
+        run: sudo apt update && sudo apt install -y rclone
 
-      - name: Save service account JSON
-        run: |
-          echo "${{ secrets.GDRIVE_SERVICE_ACCOUNT }}" > /tmp/sa.json
+      - name: Create Service Account JSON
+        run: echo "${{ secrets.GDRIVE_SERVICE_ACCOUNT }}" > /tmp/sa.json
 
-      - name: Upload file to Google Drive
+      - name: Create rclone.conf
         run: |
-          rclone copy ./spotify.png drive: \
-            --drive-service-account-file /tmp/sa.json \
-            --drive-root-folder-id 1EVIHk24_3C7DsCLcYoQOdrM_T11UrkWH \
-            -P
+          mkdir -p ~/.config/rclone
+          cat <<EOF > ~/.config/rclone/rclone.conf
+          [drive]
+          type = drive
+          scope = drive
+          service_account_file = /tmp/sa.json
+          root_folder_id = 1EVIHk24_3C7DsCLcYoQOdrM_T11UrkWH
+          EOF
+
+      - name: Test rclone
+        run: rclone about drive:
+
+      - name: Upload file
+        run: rclone copy ./spotify.png drive: -P
