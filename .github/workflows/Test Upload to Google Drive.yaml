@@ -1,5 +1,5 @@
 name: Upload Spotify PNG to GDrive
-
+ 
 on:
   workflow_dispatch: # Allows manual trigger
 
