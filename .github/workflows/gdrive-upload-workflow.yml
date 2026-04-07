@@ -1,4 +1,4 @@
-name: Render Reel Video & Upload to Google Drive
+name: Render Reels & Upload to Google Drive
 
 on:
   workflow_dispatch:
@@ -8,34 +8,45 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # Step 1: Checkout repo
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      - name: Install ffmpeg
+      # Step 2: Install ffmpeg and rclone
+      - name: Install ffmpeg and rclone
         run: |
           sudo apt update
-          sudo apt install -y ffmpeg
+          sudo apt install -y ffmpeg unzip curl
+          curl https://rclone.org/install.sh | sudo bash
 
+      # Step 3: Setup rclone with service account
+      - name: Setup rclone
+        run: |
+          mkdir -p ~/.config/rclone
+          echo "${{ secrets.GDRIVE_SERVICE_ACCOUNT }}" > ~/service_account.json
+          rclone config create gdrive drive scope drive.file service_account_file ~/service_account.json
+
+      # Step 4: Prepare paths and clean old outputs
       - name: Prepare paths
         run: |
           mkdir -p output tmp
           rm -rf output/* tmp/*
 
+      # Step 5: Run your reel generation script
       - name: Run script
         run: |
           chmod +x script.sh
           ./script.sh
 
-      - name: Upload output as artifact (1 day retention)
+      # Step 6: Upload output as temporary GitHub artifact
+      - name: Upload output artifact (1 day retention)
         uses: actions/upload-artifact@v4
         with:
           name: final-video
           path: output/
-          retention-days: 1   # automatically deletes after 1 day
+          retention-days: 1
 
+      # Step 7: Upload to Google Drive
       - name: Upload to Google Drive
-        uses: rishabh3112/google-drive-upload@v1
-        with:
-          json_key: ${{ secrets.GDRIVE_SERVICE_ACCOUNT }}
-          folder_id: 1EVIHk24_3C7DsCLcYoQOdrM_T11UrkWH
-          src: output/*
+        run: |
+          rclone copy output/ gdrive:1EVIHk24_3C7DsCLcYoQOdrM_T11UrkWH/ -P
