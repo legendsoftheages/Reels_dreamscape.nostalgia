@@ -10,6 +10,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v3
 
+      - name: Install Rclone
+        run: |
+          curl https://rclone.org/install.sh | sudo bash
+
       - name: Save Service Account Key
         run: |
           echo "${{ secrets.GDRIVE_SERVICE_ACCOUNT }}" > /tmp/sa.json
