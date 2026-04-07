@@ -1,41 +1,32 @@
-name: Upload to Google Drive
+name: Test Upload to Google Drive
 
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
 
 jobs:
-  upload:
+  upload-to-gdrive:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v3
 
-      - name: Set up Python (needed for rclone dependencies sometimes)
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.x"
-
-      - name: Install rclone
+      - name: Set up rclone
         run: |
           curl https://rclone.org/install.sh | sudo bash
 
-      - name: Save Service Account JSON
+      - name: Create service account file
         run: |
           echo "${{ secrets.GDRIVE_SERVICE_ACCOUNT }}" > /tmp/sa.json
 
       - name: Create rclone config
         run: |
           mkdir -p ~/.config/rclone
-          cat <<EOF > ~/.config/rclone/rclone.conf
-[drive]
-type = drive
-scope = drive
-service_account_file = /tmp/sa.json
-root_folder_id = 1EVIHk24_3C7DsCLcYoQOdrM_T11UrkWH
-EOF
+          echo "[drive]" > ~/.config/rclone/rclone.conf
+          echo "type = drive" >> ~/.config/rclone/rclone.conf
+          echo "scope = drive" >> ~/.config/rclone/rclone.conf
+          echo "service_account_file = /tmp/sa.json" >> ~/.config/rclone/rclone.conf
+          echo "root_folder_id = 1EVIHk24_3C7DsCLcYoQOdrM_T11UrkWH" >> ~/.config/rclone/rclone.conf
 
       - name: Upload file to Google Drive
         run: |
