@@ -1,83 +1,31 @@
-name: Test Upload spotify.png to Google Drive
+name: Diagnose Service Account Issue
 
 on:
   workflow_dispatch:
 
 jobs:
-  test-upload:
+  diagnose:
     runs-on: ubuntu-latest
     steps:
-      # Step 1: Checkout repo
       - name: Checkout repo
         uses: actions/checkout@v4
 
-      # Step 2: Install rclone
-      - name: Install rclone
-        run: |
-          sudo apt update
-          sudo apt install -y curl
-          curl https://rclone.org/install.sh | sudo bash
-
-      # Step 3: Check if spotify.png exists
-      - name: Check if spotify.png exists
-        run: |
-          if [ -f spotify.png ]; then
-            echo "✅ spotify.png found"
-            ls -lh spotify.png
-          else
-            echo "❌ spotify.png NOT found in repo root"
-            echo "Files in current directory:"
-            ls -la
-            exit 1
-          fi
-
-      # Step 4: Setup rclone with service account (FIXED)
-      - name: Setup rclone
+      - name: Check service account secret
         env:
           GDRIVE_SERVICE_ACCOUNT: ${{ secrets.GDRIVE_SERVICE_ACCOUNT }}
         run: |
-          mkdir -p ~/.config/rclone
+          echo "=== Secret length ==="
+          echo "$GDRIVE_SERVICE_ACCOUNT" | wc -c
           
-          # Write service account JSON carefully (base64 encoded to avoid parsing issues)
-          cat > ~/service_account.json << 'SERVICEACCOUNT'
-          ${{ secrets.GDRIVE_SERVICE_ACCOUNT }}
-          SERVICEACCOUNT
+          echo ""
+          echo "=== First 200 characters ==="
+          echo "$GDRIVE_SERVICE_ACCOUNT" | head -c 200
           
-          # Verify file was created and has content
-          if [ ! -s ~/service_account.json ]; then
-            echo "❌ Service account file is empty!"
-            exit 1
-          fi
+          echo ""
+          echo "=== Checking if valid JSON ==="
+          echo "$GDRIVE_SERVICE_ACCOUNT" | python3 -m json.tool > /tmp/check.json 2>&1 && echo "✅ Valid JSON" || echo "❌ Invalid JSON - see error below:"
+          cat /tmp/check.json
           
-          echo "✅ Service account file created"
-          echo "File size: $(wc -c < ~/service_account.json) bytes"
-          
-          # Create rclone config
-          cat > ~/.config/rclone/rclone.conf << 'EOF'
-          [gdrive]
-          type = drive
-          scope = drive.file
-          service_account_file = /home/runner/service_account.json
-          EOF
-          
-          echo "✅ Rclone configured"
-          rclone version
-
-      # Step 5: Test rclone connection
-      - name: Test rclone connection
-        run: |
-          echo "Testing rclone connection..."
-          rclone lsd gdrive: -v || echo "Connection test completed"
-
-      # Step 6: Upload spotify.png to Google Drive
-      - name: Upload spotify.png to Google Drive
-        run: |
-          echo "Starting upload..."
-          rclone copy spotify.png gdrive:1EVIHk24_3C7DsCLcYoQOdrM_T11UrkWH/ -v --stats 1s
-          echo "✅ Upload complete!"
-
-      # Step 7: Verify upload
-      - name: Verify upload
-        run: |
-          echo "Files in Google Drive folder:"
-          rclone ls gdrive:1EVIHk24_3C7DsCLcYoQOdrM_T11UrkWH/ -v
+          echo ""
+          echo "=== Looking for private_key field ==="
+          echo "$GDRIVE_SERVICE_ACCOUNT" | grep -o '"private_key"' | head -1 && echo "✅ private_key field found" || echo "❌ private_key field not found"
