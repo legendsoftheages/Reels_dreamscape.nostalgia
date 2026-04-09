@@ -5,7 +5,7 @@ set -e
 TMP=$(mktemp -d)
 INPUT_DIR="./reels"
 AUDIO_DIR="./audio"
-FONT="./Inter-Black.ttf"
+# FONT="./Inter-Black.ttf" # We'll handle this in the FILTER below to guarantee a load
 LOGO_PATH="./spotify.png"
 QUOTES_FILE="./quotes.txt"
 OUTPUT_DIR="./output"
@@ -15,8 +15,13 @@ mkdir -p "$OUTPUT_DIR"
 # 1. Check for required assets
 [ ! -f "$QUOTES_FILE" ] && echo "❌ quotes.txt not found" && exit 1
 [ ! -f "$LOGO_PATH" ] && echo "❌ spotify.png not found" && exit 1
-# Fallback for font if not in repo
-[ ! -f "$FONT" ] && FONT="/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+
+# --- FONT HANDLING IMPROVEMENT ---
+# Define the path to the definitive system font used by the Ubuntu runner.
+# This ensures drawtext can always load a font.
+DEJAVU_FONT="/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf"
+# If you committed a custom font (Inter-Black.ttf), you can use it, but this is safer:
+FONT_TO_USE="$DEJAVU_FONT"
 
 # 2. Select random clips (15 clips, 1 second each)
 FILES=($(find "$INPUT_DIR" -maxdepth 1 -type f -iname "*.mp4" | sort -R | head -n 15))
@@ -37,7 +42,7 @@ for f in "${FILES[@]}"; do
   START=$(awk -v d="$DURATION" 'BEGIN{srand(); if(d>1.5) printf "%.3f", rand()*(d-1.2); else print 0}')
 
   ffmpeg -ss "$START" -i "$f" -t 1 \
-    -vf "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:(ow-iw)/2:(oh-ih)/2,fps=30" \
+    -vf "scale=1080:1920:force_original_aspect_ratio=decrease,pad=1080:1920:trunc((ow-iw)/2):trunc((oh-ih)/2):color=black,fps=30" \
     -c:v libx264 -preset superfast -crf 23 -pix_fmt yuv420p \
     -an "$TMP/clip_$i.mp4" -y -loglevel error
 
@@ -62,10 +67,15 @@ TOTAL_QUOTES=$(wc -l < "$QUOTES_FILE")
 RANDOM_LINE=$((RANDOM % TOTAL_QUOTES + 1))
 RAW_QUOTE=$(sed -n "${RANDOM_LINE}p" "$QUOTES_FILE")
 
-# Fix: Create a temporary file with the wrapped text to preserve newlines
-echo "$RAW_QUOTE" | fold -s -w 35 > "$TMP/wrapped_quote.txt"
+# Generate the quote file with multi-line wrapping
+echo "$RAW_QUOTE" | fold -s -w 32 > "$TMP/wrapped_quote.txt"
 
-# Fix: Clean filename (No underscores, just spaces and letters)
+# --- DEBUG: Print the quote file content to logs ---
+echo "--- Wrapped Quote Content ---"
+cat "$TMP/wrapped_quote.txt"
+echo "------------------------------"
+
+# Clean filename for output
 SAFE_FILENAME=$(echo "$RAW_QUOTE" | sed 's/[^a-zA-Z0-9 ]/ /g' | tr -s ' ' | xargs)
 FINAL_OUTPUT="$OUTPUT_DIR/${SAFE_FILENAME}.mp4"
 
@@ -74,10 +84,11 @@ logo_start=$(awk -v d="$VIDEO_DURATION" 'BEGIN{printf "%.2f", d/2}')
 logo_end=$(awk -v d="$VIDEO_DURATION" 'BEGIN{printf "%.2f", d-1}')
 logo_fadeout=$(awk -v e="$logo_end" 'BEGIN{printf "%.2f", e-1}')
 
-# The Filter: Uses 'textfile' instead of 'text' to ensure multi-line rendering
+# The Filter: Increased border padding to ensure the text box itself is visible.
+# x=(w-tw)/2 centers the box horizontally; y=(h-th)/2 centers vertically.
 FILTER="[1:v]loop=loop=-1:size=1:start=0,fps=30,setpts=N/(30*TB),scale=180:-1,format=rgba,fade=t=in:st=${logo_start}:d=1:alpha=1,fade=t=out:st=${logo_fadeout}:d=1:alpha=1[logo]; \
 [0:v][logo]overlay=x=(W-w)/2:y=H-h-120:format=auto:shortest=1[v_logo]; \
-[v_logo]drawtext=fontfile='${FONT}':textfile='$TMP/wrapped_quote.txt':fontcolor=white:fontsize=48:box=1:boxcolor=black@0.6:boxborderw=20:line_spacing=15:x=(w-text_w)/2:y=(h-text_h)/2[v_out]"
+[v_logo]drawtext=fontfile='${FONT_TO_USE}':textfile='$TMP/wrapped_quote.txt':fontcolor=white:fontsize=52:box=1:boxcolor=black@0.65:boxborderw=25:line_spacing=15:x=(w-text_w)/2:y=(h-text_h)/2[v_out]"
 
 # 9. Final Render
 ffmpeg -i "$MERGED_AUDIO" -i "$LOGO_PATH" \
