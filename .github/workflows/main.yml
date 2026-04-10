@@ -2,7 +2,13 @@ name: Render Reel Video
 
 on:
   workflow_dispatch:
-  
+  schedule:
+    - cron: '0 0 * * *'
+      timezone: 'Asia/Kolkata'
+    - cron: '0 3 * * *'
+      timezone: 'Asia/Kolkata'
+    - cron: '0 6 * * *'
+      timezone: 'Asia/Kolkata'
 
 permissions:
   contents: write
