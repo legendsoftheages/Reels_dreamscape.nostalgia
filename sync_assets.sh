@@ -2,15 +2,14 @@
 set -e
 
 # --- CONFIGURATION ---
-# List the folders you want to sync, separated by spaces
-SYNC_FOLDERS="audio" 
+# Format: "DriveFolderName:GithubPath"
+# Example: "My_Reels:videos music_folder:assets/audio"
+MAPPINGS="audio:audio reels/hiddenmemoriz:reels"
 
-echo "🔐 Setting up Private Smart Sync..."
+echo "🔐 Setting up Path-Specific Smart Sync..."
 
-# 1. Install Rclone
+# 1. Prepare Rclone & Auth
 sudo apt-get install rclone -y --quiet
-
-# 2. Authenticate the Bot
 mkdir -p ~/.config/rclone
 echo "$GDRIVE_SERVICE_ACCOUNT" > ~/.config/rclone/service_account.json
 
@@ -21,16 +20,20 @@ service_account_file = ~/.config/rclone/service_account.json
 scope = drive.readonly
 EOF
 
-# 3. Loop through and Mirror Folders
+# 2. Loop through Mappings
 if [ -n "$GDRIVE_FOLDER_ID" ]; then
-    for FOLDER in $SYNC_FOLDERS; do
-        echo "🔄 Mirroring (Syncing) Folder: $FOLDER..."
-        
-        # Ensure the local folder exists
-        mkdir -p "./$FOLDER"
+    for MAP in $MAPPINGS; do
+        # Split the mapping into Source and Destination
+        SRC_FOLDER=${MAP%%:*}
+        DEST_PATH=${MAP#*:}
 
-        # 'sync' will DELETE files in GitHub that no longer exist in GDrive
-        rclone sync "private_drive:$FOLDER" "./$FOLDER" \
+        echo "🔄 Syncing Drive [$SRC_FOLDER] to GitHub [$DEST_PATH]..."
+        
+        # Ensure the custom local directory exists
+        mkdir -p "./$DEST_PATH"
+
+        # Mirror the folder
+        rclone sync "private_drive:$SRC_FOLDER" "./$DEST_PATH" \
             --drive-root-folder-id "$GDRIVE_FOLDER_ID" \
             --checksum \
             --verbose \
@@ -40,18 +43,17 @@ else
     echo "❌ ERROR: GDRIVE_FOLDER_ID missing" && exit 1
 fi
 
-# 4. PUSH TO REPOSITORY
-# This step makes the files visible in your GitHub "Code" tab
-echo "📤 Committing and Pushing to GitHub..."
-rm ~/.config/rclone/service_account.json # Security: remove key before push
+# 3. PUSH TO REPOSITORY
+echo "📤 Committing changes..."
+rm ~/.config/rclone/service_account.json 
 
 git config --global user.name "github-actions[bot]"
 git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
 git add .
-# [skip ci] prevents the action from triggering itself in an infinite loop
 git commit -m "Automated Warehouse Sync [skip ci]" || echo "No changes to commit"
 
-# This automatically pushes to the current active branch
-git push origin $(git rev-parse --abbrev-ref HEAD)
-echo "✅ Sync and Push complete. Check your repo now!"
+CURRENT_BRANCH=$(git rev-parse --abbrev-ref HEAD)
+git push origin "$CURRENT_BRANCH"
+
+echo "✅ Custom path sync complete!"
