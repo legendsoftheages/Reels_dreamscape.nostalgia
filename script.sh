@@ -85,33 +85,33 @@ ffmpeg -i "$VISUAL_MASTER" -i "$AUDIO_FILE" \
   -map 0:v -map "[aud]" -c:v copy -c:a aac -b:a 128k -shortest \
   -movflags +faststart "$out_file" -y -loglevel warning
 
-# --- 5. CATBOX UPLOAD, GITHUB RELEASE & WEBHOOK ---
-if [ -n "$GH_TOKEN" ]; then
-    echo "📤 Uploading to Catbox..."
-    # --silent keeps the response clean so CAT_URL is just the link
-    CAT_URL=$(curl --silent --fail -F "reqtype=fileupload" -F "fileToUpload=@$out_file" https://catbox.moe/user/api.php || echo "CATBOX_UPLOAD_FAILED")
-    
-    echo "📦 Creating GitHub Release..."
-    TAG_NAME="v-${GITHUB_RUN_ID:-$(date +%s)}"
-    gh release create "$TAG_NAME" "$out_file" --title "Reel: $safe_name"
-    
-    # We build the GHT_URL using the variables directly
-    GHT_URL="https://github.com/${GITHUB_REPOSITORY}/releases/download/$TAG_NAME/$url_filename"
-    
-    if [ -n "$WEBHOOK_URL" ]; then
-        echo "🚀 Sending Webhook..."
-        # CLEAN SINGLE-LINE JSON (Avoids EOF and variable missing errors)
-        curl -X POST -H "Content-Type: application/json" \
-          -d "{\"downloadLink\": \"$GHT_URL\", \"AlternativeDownLink\": \"$CAT_URL\", \"fileName\": \"$safe_name\"}" \
-          "$WEBHOOK_URL"
+# --- 5. CATBOX UPLOAD, GITHUB RELEASE & WEBHOOK Skipssss ---
+
+# --- LOG TO GOOGLE SHEETS VIA SHEETDB ---
+    # Put your SheetDB URL here or add it to GitHub Secrets
+    SHEETDB_URL="https://sheetdb.io/api/v1/qy9jx838tav66"
+
+    if [ -n "$SHEETDB_URL" ]; then
+        echo "📊 Logging to Google Sheets..."
+        
+        # Get current IST date and time
+        CURRENT_DATE=$(date +%Y-%m-%d)
+        CURRENT_TIME=$(date +%H:%M:%S)
+
+        # SheetDB expects the data inside a "data" array
+        curl -X POST "$SHEETDB_URL" \
+          -H "Content-Type: application/json" \
+          -d "{
+            \"data\": [
+              {
+                \"url\": \"$GHT_URL\",
+                \"title\": \"$safe_name\",
+                \"date\": \"$CURRENT_DATE\",
+                \"time\": \"$CURRENT_TIME\"
+              }
+            ]
+          }"
     fi
-    
-    echo "🧹 Cleaning up old releases..."
-    OLD_RELEASES=$(gh release list --limit 20 --json tagName --jq '.[].tagName' | grep "v-" | grep -v "$TAG_NAME") || true
-    for old_tag in $OLD_RELEASES; do
-        gh release delete "$old_tag" --yes --cleanup-tag || true
-    done
-fi
 
 echo "✅ SUCCESS!"
 rm -rf "$TMP"
