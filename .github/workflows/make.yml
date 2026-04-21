@@ -3,7 +3,7 @@ name: Render Reel Video -Make.com
 on:
   workflow_dispatch:
   push:
-  schedule:
+ 
  
 
 permissions:
